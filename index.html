@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#007bff" />
+  <meta name="description" content="Caja registradora para Garage Cócteles y Micheladas">
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <title>Garage - Caja</title>
+
+  <!-- Google Fonts: Gothic -->
+  <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+      color: #212529;
+      -webkit-text-size-adjust: 100%;
+    }
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 0.5rem;
+    }
+    .gothic {
+      font-family: 'MedievalSharp', cursive;
+      font-size: 1.8rem;
+      text-align: center;
+      margin: 0.5rem 0;
+      color: #333;
+    }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .product-btn {
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      background: #e9ecef;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      text-align: left;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .product-btn:hover, .product-btn:active {
+      background: #dee2e6;
+    }
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      font-size: 1.1rem;
+    }
+    .cart-footer {
+      border-top: 2px solid #adb5bd;
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: bold;
+    }
+    input, button {
+      padding: 0.75rem;
+      font-size: 1.1rem;
+      border: 1px solid #ced4da;
+      border-radius: 8px;
+    }
+    button.success {
+      background: #28a745;
+      color: white;
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+    }
+    button.danger {
+      background: #dc3545;
+      color: white;
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+    }
+    .flex {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .receipt-content {
+      font-family: monospace;
+      width: 80mm;
+      background: white;
+      padding: 0.5rem;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    .receipt-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 1rem;
+    }
+    @media print {
+      .receipt-content {
+        -webkit-print-color-adjust: exact;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+    @media (max-width: 640px) {
+      .product-btn {
+        font-size: 1.2rem;
+        padding: 1.2rem 1rem;
+      }
+      .success, .danger {
+        font-size: 1.3rem;
+        padding: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Nombre del negocio -->
+    <div class="panel">
+      <h1 class="gothic">GARAGE Cócteles y Micheladas</h1>
+    </div>
+
+    <!-- Carrito -->
+    <div class="panel">
+      <h2>Carrito</h2>
+      <div id="cartItems"></div>
+      <div class="cart-footer">
+        Total: $<span id="cartTotal">0.00</span>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem;">Dinero recibido:</label>
+        <input 
+          type="number" 
+          id="cashReceived" 
+          placeholder="Ej: 20.00" 
+          step="0.01" 
+          onkeypress="if(event.key==='Enter')calculateChange()"
+          style="width: 100%;"
+        />
+        <div style="margin-top: 0.75rem; font-size: 1.2rem;">
+          Cambio: $<span id="changeAmount">0.00</span>
+        </div>
+      </div>
+
+      <button onclick="printReceipt()" class="success">🧾 Emitir Recibo</button>
+      <button onclick="clearCart()" class="danger">🗑️ Limpiar Carrito</button>
+    </div>
+
+    <!-- Productos -->
+    <div class="panel">
+      <h2>Productos</h2>
+      <div class="flex">
+        <button class="product-btn" onclick="addToCart('Cóctel de conchas', 3.50)">Cóctel de conchas ($3.50)</button>
+        <button class="product-btn" onclick="addToCart('Cóctel de pescado', 3.50)">Cóctel de pescado ($3.50)</button>
+        <button class="product-btn" onclick="addToCart('Cóctel de camarón', 3.50)">Cóctel de camarón ($3.50)</button>
+        <button class="product-btn" onclick="addToCart('Cóctel mixto', 3.50)">Cóctel mixto ($3.50)</button>
+        <button class="product-btn" onclick="addToCart('Michelada tradicional nac', 2.50)">Michelada nac ($2.50)</button>
+        <button class="product-btn" onclick="addToCart('Michelada tradicional ext', 3.00)">Michelada ext ($3.00)</button>
+        <button class="product-btn" onclick="addToCart('Michelada Clamato nac', 2.50)">Michelada Clamato nac ($2.50)</button>
+        <button class="product-btn" onclick="addToCart('Michelada Clamato ext', 3.00)">Michelada Clamato ext ($3.00)</button>
+        <button class="product-btn" onclick="addToCart('Michelada tamarindo nac', 2.50)">Michelada tamarindo nac ($2.50)</button>
+        <button class="product-btn" onclick="addToCart('Michelada tamarindo ext', 3.00)">Michelada tamarindo ext ($3.00)</button>
+        <button class="product-btn" onclick="addToCart('Michelada soda mineral', 2.00)">Michelada soda mineral ($2.00)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Pilsener', 1.25)">Cerveza Pilsener ($1.25)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Golden', 1.25)">Cerveza Golden ($1.25)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Golden Extra', 1.25)">Cerveza Golden Extra ($1.25)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Suprema', 1.25)">Cerveza Suprema ($1.25)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Regia', 1.25)">Cerveza Regia ($1.25)</button>
+        <button class="product-btn" onclick="addToCart('Cerveza Corona', 2.00)">Cerveza Corona ($2.00)</button>
+        <button class="product-btn" onclick="addToCart('Coca Cola', 0.75)">Coca Cola ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Salutaris limón', 0.75)">Salutaris limón ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Salutaris toronja', 0.75)">Salutaris toronja ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Salutaris naranja', 0.75)">Salutaris naranja ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Salutaris simple', 0.75)">Salutaris simple ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Fanta', 0.75)">Fanta ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Agua', 0.75)">Agua ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Fresa', 0.75)">Fresa ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Fresca', 0.75)">Fresca ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Sprite', 0.75)">Sprite ($0.75)</button>
+        <button class="product-btn" onclick="addToCart('Crema soda', 0.75)">Crema soda ($0.75)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal del Recibo -->
+  <div id="receiptModal" class="receipt-modal" style="display: none;">
+    <div class="receipt-content" id="receiptContent"></div>
+  </div>
+
+  <script>
+    // Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyAfemilUuhj1qnoU1pcJ_9A7cxlq-NUzf0",
+      authDomain: "garage-bar.firebaseapp.com",
+      projectId: "garage-bar",
+      storageBucket: "garage-bar.firebasestorage.app",
+      messagingSenderId: "215355618298",
+      appId: "1:215355618298:web:eeee77976440bb7de82a43"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let cart = [];
+
+    function addToCart(name, price) {
+      cart.push({ name, price });
+      updateCart();
+    }
+
+    function updateCart() {
+      const cartItems = document.getElementById('cartItems');
+      cartItems.innerHTML = '';
+      let total = 0;
+
+      const grouped = {};
+      cart.forEach(item => {
+        if (!grouped[item.name]) grouped[item.name] = { ...item, qty: 0 };
+        grouped[item.name].qty += 1;
+      });
+
+      Object.values(grouped).forEach(item => {
+        total += item.price * item.qty;
+        const div = document.createElement('div');
+        div.className = 'cart-item';
+        div.innerHTML = `<span>${item.name} ×${item.qty}</span><span>$${(item.price * item.qty).toFixed(2)}</span>`;
+        cartItems.appendChild(div);
+      });
+
+      document.getElementById('cartTotal').textContent = total.toFixed(2);
+      document.getElementById('changeAmount').textContent = '0.00';
+    }
+
+    function calculateChange() {
+      const cash = parseFloat(document.getElementById('cashReceived').value) || 0;
+      const total = cart.reduce((sum, item) => sum + item.price, 0);
+      const change = cash - total;
+      document.getElementById('changeAmount').textContent = change >= 0 ? change.toFixed(2) : '0.00';
+    }
+
+    async function getNextReceiptNumber() {
+      const counterDoc = await db.collection('counters').doc('receipts').get();
+      let nextNum = 1;
+      if (counterDoc.exists) {
+        nextNum = counterDoc.data().value + 1;
+      }
+      await db.collection('counters').doc('receipts').set({ value: nextNum }, { merge: true });
+      return String(nextNum).padStart(4, '0');
+    }
+
+    async function printReceipt() {
+      if (cart.length === 0) return alert("El carrito está vacío.");
+
+      const total = cart.reduce((sum, item) => sum + item.price, 0);
+      const cash = parseFloat(document.getElementById('cashReceived').value) || 0;
+      const change = cash - total;
+      const receiptNumber = await getNextReceiptNumber();
+      const date = new Date().toLocaleDateString('es-ES');
+      const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+      await db.collection('receipts').add({
+        number: receiptNumber,
+        items: cart,
+        total: total,
+        cash: cash,
+        change: change,
+        timestamp: new Date(),
+        date: date,
+        time: time
+      });
+
+      const receiptHTML = `
+        <div style="text-align: center; font-family: monospace; font-size: 14px;">
+          <h2 style="margin: 0; font-size: 16px; font-weight: bold;">GARAGE CÓCTELES & MICHELADAS</h2>
+          <p style="margin: 4px 0;">Recibo #${receiptNumber}</p>
+          <p style="margin: 4px 0;">${date}  ${time}</p>
+          <hr style="border: 1px dashed #000; margin: 8px 0;">
+          ${Object.entries(cart.reduce((acc, item) => {
+            acc[item.name] = (acc[item.name] || 0) + 1;
+            return acc;
+          }, {})).map(([name, qty]) => {
+            const price = cart.find(i => i.name === name).price;
+            return `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span style="flex: 1;">${name} ×${qty}</span>
+              <span>$${(price * qty).toFixed(2)}</span>
+            </div>`;
+          }).join('')}
+          <hr style="border: 1px dashed #000; margin: 8px 0;">
+          <div style="font-weight: bold;">TOTAL: $${total.toFixed(2)}</div>
+          <div>DINERO: $${cash.toFixed(2)}</div>
+          <div>CAMBIO: $${change.toFixed(2)}</div>
+          <p style="margin-top: 10px;">¡Gracias por tu visita!</p>
+        </div>
+      `;
+
+      const modal = document.getElementById('receiptModal');
+      const content = document.getElementById('receiptContent');
+      content.innerHTML = receiptHTML;
+      modal.style.display = 'flex';
+
+      setTimeout(() => {
+        window.print();
+        modal.style.display = 'none';
+      }, 500);
+    }
+
+    function clearCart() {
+      cart = [];
+      document.getElementById('cashReceived').value = '';
+      document.getElementById('changeAmount').textContent = '0.00';
+      updateCart();
+    }
+
+    updateCart();
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('SW registrado'))
+          .catch(err => console.log('Error: ' + err));
+      });
+    }
+  </script>
+</body>
+</html>
